@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>6-7 FLIP CHALLENGE</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #13131a;
+    --card: #1a1a24;
+    --accent: #ff3c3c;
+    --accent2: #ffcc00;
+    --accent3: #00e5ff;
+    --text: #f0f0f0;
+    --muted: #6b6b80;
+    --up-color: #00e5ff;
+    --down-color: #ff3c3c;
+    --green: #00ff88;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+  }
+
+  /* SCREENS */
+  .screen { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: opacity 0.4s; }
+  .screen.hidden { opacity: 0; pointer-events: none; }
+
+  /* ── HOME SCREEN ── */
+  #homeScreen {
+    background: radial-gradient(ellipse at 50% 30%, #1a0a2e 0%, #0a0a0f 70%);
+    gap: 0;
+  }
+
+  .scanline-bg {
+    position: absolute; inset: 0; pointer-events: none; z-index: 0;
+    background: repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(255,255,255,0.015) 3px, rgba(255,255,255,0.015) 4px);
+  }
+
+  .home-content { position: relative; z-index: 1; text-align: center; width: 100%; padding: 0 20px; }
+
+  .meme-badge {
+    display: inline-block;
+    background: var(--accent2);
+    color: #000;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    padding: 4px 14px;
+    border-radius: 2px;
+    margin-bottom: 16px;
+    animation: pulse-badge 2s infinite;
+  }
+
+  @keyframes pulse-badge { 0%,100%{transform:scale(1)} 50%{transform:scale(1.05)} }
+
+  .big-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(80px, 18vw, 160px);
+    line-height: 0.85;
+    letter-spacing: 4px;
+    color: var(--text);
+    text-shadow: 0 0 60px rgba(255,60,60,0.5), 0 0 120px rgba(255,60,60,0.2);
+  }
+
+  .big-title span { color: var(--accent); }
+
+  .subtitle {
+    font-size: 13px;
+    color: var(--muted);
+    letter-spacing: 3px;
+    margin: 14px 0 40px;
+    text-transform: uppercase;
+  }
+
+  .timer-select-label {
+    font-size: 11px;
+    letter-spacing: 3px;
+    color: var(--muted);
+    margin-bottom: 14px;
+    text-transform: uppercase;
+  }
+
+  .timer-buttons {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    margin-bottom: 36px;
+    flex-wrap: wrap;
+  }
+
+  .timer-btn {
+    background: var(--card);
+    border: 1.5px solid var(--muted);
+    color: var(--text);
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 32px;
+    letter-spacing: 2px;
+    padding: 12px 28px;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.18s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .timer-btn:hover { border-color: var(--accent); color: var(--accent); transform: translateY(-2px); }
+  .timer-btn.selected {
+    border-color: var(--accent2);
+    color: var(--accent2);
+    box-shadow: 0 0 20px rgba(255,204,0,0.3);
+    background: rgba(255,204,0,0.08);
+  }
+
+  .pb-row { font-size: 10px; color: var(--muted); letter-spacing: 1px; margin-top: 4px; }
+  .pb-row span { color: var(--accent2); }
+
+  .start-btn {
+    background: var(--accent);
+    border: none;
+    color: #fff;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 28px;
+    letter-spacing: 4px;
+    padding: 16px 60px;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.18s;
+    box-shadow: 0 0 30px rgba(255,60,60,0.4);
+  }
+
+  .start-btn:hover { transform: scale(1.04); box-shadow: 0 0 50px rgba(255,60,60,0.6); }
+
+  .hint-text {
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 16px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  /* ── GAME SCREEN ── */
+  #gameScreen { padding: 0; background: #000; }
+
+  #videoEl {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    object-fit: cover;
+    transform: scaleX(-1);
+    opacity: 0.85;
+  }
+
+  #overlayCanvas {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    transform: scaleX(-1);
+  }
+
+  /* HUD */
+  .hud { position: absolute; inset: 0; pointer-events: none; z-index: 10; }
+
+  .hud-top {
+    position: absolute; top: 0; left: 0; right: 0;
+    display: flex; align-items: stretch; justify-content: space-between;
+    padding: 16px 20px 0; gap: 12px;
+  }
+
+  .hud-card {
+    background: rgba(10,10,15,0.82);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 6px;
+    padding: 10px 18px;
+    text-align: center;
+    backdrop-filter: blur(6px);
+    min-width: 90px;
+  }
+
+  .hud-label { font-size: 9px; letter-spacing: 3px; color: var(--muted); text-transform: uppercase; margin-bottom: 4px; }
+  .hud-value { font-family: 'Bebas Neue', sans-serif; font-size: 42px; line-height: 1; color: var(--text); }
+  #hudCounter { color: var(--accent2); font-size: 64px; }
+  #hudTimer { color: var(--accent3); }
+  #hudTimer.warning { color: var(--accent); animation: timer-pulse 0.5s infinite; }
+  @keyframes timer-pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  .hud-pb { font-size: 9px; color: var(--muted); letter-spacing: 1px; margin-top: 2px; }
+  .hud-pb span { color: var(--accent2); }
+
+  /* State indicator */
+  #stateIndicator {
+    position: absolute;
+    bottom: 28px; left: 50%;
+    transform: translateX(-50%);
+    display: flex; gap: 16px; align-items: center;
+    background: rgba(10,10,15,0.82);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 30px;
+    padding: 10px 24px;
+    backdrop-filter: blur(6px);
+  }
+
+  .state-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--muted); transition: background 0.15s, box-shadow 0.15s; }
+  .state-dot.active-up { background: var(--up-color); box-shadow: 0 0 12px var(--up-color); }
+  .state-dot.active-down { background: var(--down-color); box-shadow: 0 0 12px var(--down-color); }
+
+  #stateLabel { font-family: 'Bebas Neue', sans-serif; font-size: 22px; letter-spacing: 3px; color: var(--text); min-width: 100px; text-align: center; }
+
+  #flipFlash { position: absolute; inset: 0; pointer-events: none; z-index: 5; opacity: 0; transition: opacity 0.05s; }
+
+  /* Position guide */
+  #posGuide {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    opacity: 1; transition: opacity 0.5s; pointer-events: none; z-index: 8;
+  }
+
+  #posGuide.hide { opacity: 0; }
+
+  .guide-box {
+    border: 2px dashed rgba(255,255,255,0.25); border-radius: 12px;
+    width: 180px; height: 280px; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 6px;
+  }
+
+  .guide-hand-icon { font-size: 72px; opacity: 0.35; }
+  .guide-arrow { font-family: 'Bebas Neue', sans-serif; font-size: 14px; letter-spacing: 3px; color: rgba(255,255,255,0.35); animation: guide-bounce 1.2s infinite; }
+  @keyframes guide-bounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
+  .guide-label { font-size: 10px; letter-spacing: 3px; color: rgba(255,255,255,0.3); text-transform: uppercase; }
+
+  /* Countdown overlay */
+  #countdownOverlay {
+    position: absolute; inset: 0; background: rgba(10,10,15,0.88);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 20; gap: 12px; transition: opacity 0.3s;
+  }
+
+  #countdownOverlay.hidden { opacity: 0; pointer-events: none; }
+  .countdown-get-ready { font-size: 13px; letter-spacing: 5px; color: var(--muted); text-transform: uppercase; }
+  #countdownNum { font-family: 'Bebas Neue', sans-serif; font-size: 140px; color: var(--accent2); line-height: 1; text-shadow: 0 0 60px rgba(255,204,0,0.5); }
+
+  /* ── RESULTS SCREEN ── */
+  #resultsScreen { background: radial-gradient(ellipse at 50% 60%, #0a1a0a 0%, #0a0a0f 70%); gap: 20px; text-align: center; }
+  .result-label { font-size: 11px; letter-spacing: 5px; color: var(--muted); text-transform: uppercase; }
+  .result-score { font-family: 'Bebas Neue', sans-serif; font-size: clamp(100px, 20vw, 180px); color: var(--accent2); line-height: 0.9; text-shadow: 0 0 80px rgba(255,204,0,0.4); }
+  .result-pb-badge { display: inline-block; background: var(--green); color: #000; font-size: 11px; font-weight: 700; letter-spacing: 3px; padding: 5px 16px; border-radius: 2px; }
+
+  .result-stats { display: flex; gap: 24px; justify-content: center; flex-wrap: wrap; }
+  .result-stat { background: var(--card); border: 1px solid rgba(255,255,255,0.07); border-radius: 6px; padding: 12px 22px; min-width: 100px; }
+  .result-stat-label { font-size: 9px; letter-spacing: 3px; color: var(--muted); margin-bottom: 6px; }
+  .result-stat-val { font-family: 'Bebas Neue', sans-serif; font-size: 28px; color: var(--text); }
+
+  .result-actions { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+  .res-btn { background: transparent; border: 1.5px solid var(--muted); color: var(--text); font-family: 'Bebas Neue', sans-serif; font-size: 20px; letter-spacing: 3px; padding: 12px 32px; cursor: pointer; border-radius: 4px; transition: all 0.18s; }
+  .res-btn:hover { border-color: var(--accent3); color: var(--accent3); }
+  .res-btn.primary { background: var(--accent); border-color: var(--accent); }
+
+  #comboPopup { position: absolute; top: 100px; left: 50%; transform: translateX(-50%); font-family: 'Bebas Neue', sans-serif; font-size: 36px; color: var(--green); text-shadow: 0 0 20px rgba(0,255,136,0.5); letter-spacing: 4px; pointer-events: none; z-index: 15; opacity: 0; transition: opacity 0.2s, transform 0.2s; }
+  #comboPopup.show { opacity: 1; transform: translateX(-50%) translateY(-10px); }
+
+  #speedMeter { position: absolute; bottom: 90px; right: 20px; background: rgba(10,10,15,0.82); border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; padding: 10px 16px; text-align: center; backdrop-filter: blur(6px); min-width: 80px; }
+  .speed-label { font-size: 9px; letter-spacing: 2px; color: var(--muted); margin-bottom: 4px; text-transform: uppercase; }
+  #speedVal { font-family: 'Bebas Neue', sans-serif; font-size: 28px; color: var(--green); }
+  .speed-unit { font-size: 9px; color: var(--muted); }
+
+  #streakBar { position: absolute; bottom: 90px; left: 20px; background: rgba(10,10,15,0.82); border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; padding: 10px 16px; min-width: 80px; backdrop-filter: blur(6px); text-align: center; }
+  .streak-label { font-size: 9px; letter-spacing: 2px; color: var(--muted); margin-bottom: 4px; text-transform: uppercase; }
+  #streakVal { font-family: 'Bebas Neue', sans-serif; font-size: 28px; color: var(--accent); }
+
+  /* ── MOBILE & TABLET ADAPTATIONS ── */
+  @media (max-width: 768px) {
+    .big-title { font-size: clamp(50px, 15vw, 90px); }
+    .hud-top { padding: 10px 10px 0; gap: 8px; }
+    .hud-card { min-width: 75px; padding: 6px 12px; }
+    .hud-value { font-size: 32px; }
+    #hudCounter { font-size: 45px; }
+    #stateIndicator { bottom: 100px; padding: 6px 16px; }
+    #stateLabel { font-size: 16px; min-width: 80px; }
+    #speedMeter { bottom: 20px; right: 10px; padding: 6px 10px; }
+    #streakBar { bottom: 20px; left: 10px; padding: 6px 10px; }
+    .guide-box { width: 140px; height: 200px; }
+    .guide-hand-icon { font-size: 48px; }
+    .timer-btn { font-size: 22px; padding: 8px 20px; }
+  }
+
+  @media (max-height: 600px) {
+    .big-title { font-size: 45px; }
+    .timer-buttons { margin-bottom: 20px; }
+    .subtitle { margin-bottom: 20px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="homeScreen" class="screen">
+  <div class="scanline-bg"></div>
+  <div class="home-content">
+    <div class="meme-badge">MEME CHALLENGE</div>
+    <div class="big-title"><span>6</span>-<span>7</span><br>FLIP</div>
+    <div class="subtitle">Both hands: One up, One down!</div>
+
+    <div class="timer-select-label">Choose your duration</div>
+    <div class="timer-buttons">
+      <div style="text-align:center">
+        <button class="timer-btn selected" data-sec="10">10s</button>
+        <div class="pb-row">BEST: <span id="pb10">0</span></div>
+      </div>
+      <div style="text-align:center">
+        <button class="timer-btn" data-sec="30">30s</button>
+        <div class="pb-row">BEST: <span id="pb30">0</span></div>
+      </div>
+      <div style="text-align:center">
+        <button class="timer-btn" data-sec="60">60s</button>
+        <div class="pb-row">BEST: <span id="pb60">0</span></div>
+      </div>
+    </div>
+
+    <button class="start-btn" id="startBtn">START GAME</button>
+    <div class="hint-text">Requires both hands in view</div>
+  </div>
+</div>
+
+<div id="gameScreen" class="screen hidden">
+  <video id="videoEl" playsinline></video>
+  <canvas id="overlayCanvas"></canvas>
+
+  <div id="posGuide">
+    <div class="guide-label">Show both hands to begin</div>
+    <div class="guide-box">
+      <div class="guide-hand-icon">✋ ✋</div>
+      <div class="guide-arrow">↕ ONE UP, ONE DOWN</div>
+    </div>
+  </div>
+
+  <div id="countdownOverlay">
+    <div class="countdown-get-ready">Get ready...</div>
+    <div id="countdownNum">5</div>
+  </div>
+
+  <div id="flipFlash"></div>
+  <div id="comboPopup">🔥 COMBO x5!</div>
+
+  <div class="hud">
+    <div class="hud-top">
+      <div class="hud-card">
+        <div class="hud-label">Time Left</div>
+        <div class="hud-value" id="hudTimer">10</div>
+      </div>
+      <div class="hud-card" style="flex:1">
+        <div class="hud-label">Flips</div>
+        <div class="hud-value" id="hudCounter">0</div>
+        <div class="hud-pb">PB: <span id="hudPB">0</span></div>
+      </div>
+      <div class="hud-card">
+        <div class="hud-label">Mode</div>
+        <div class="hud-value" id="hudMode" style="font-size:28px;padding-top:6px;">10s</div>
+      </div>
+    </div>
+
+    <div id="speedMeter">
+      <div class="speed-label">Speed</div>
+      <div id="speedVal">0</div>
+      <div class="speed-unit">flips/sec</div>
+    </div>
+
+    <div id="streakBar">
+      <div class="streak-label">Streak</div>
+      <div id="streakVal">0</div>
+    </div>
+
+    <div id="stateIndicator">
+      <div class="state-dot" id="dotUp"></div>
+      <div id="stateLabel">WAITING...</div>
+      <div class="state-dot" id="dotDown"></div>
+    </div>
+  </div>
+</div>
+
+<div id="resultsScreen" class="screen hidden">
+  <div class="result-label">Your score</div>
+  <div class="result-score" id="resultScore">0</div>
+  <div id="pbBadge" class="result-pb-badge hidden">🏆 NEW PERSONAL BEST!</div>
+  <div class="result-stats">
+    <div class="result-stat">
+      <div class="result-stat-label">Duration</div>
+      <div class="result-stat-val" id="resDuration">10s</div>
+    </div>
+    <div class="result-stat">
+      <div class="result-stat-label">Best Ever</div>
+      <div class="result-stat-val" id="resBest">0</div>
+    </div>
+    <div class="result-stat">
+      <div class="result-stat-label">Flips/sec</div>
+      <div class="result-stat-val" id="resRate">0</div>
+    </div>
+    <div class="result-stat">
+      <div class="result-stat-label">Top Streak</div>
+      <div class="result-stat-val" id="resStreak">0</div>
+    </div>
+  </div>
+  <div class="result-actions">
+    <button class="res-btn primary" id="playAgainBtn">PLAY AGAIN</button>
+    <button class="res-btn" id="homeBtn">HOME</button>
+  </div>
+</div>
+
+<script>
+const AC = new (window.AudioContext || window.webkitAudioContext)();
+function resumeAudio() { if (AC.state === 'suspended') AC.resume(); }
+
+function play67Sound(vol = 0.7) {
+  resumeAudio();
+  const osc = AC.createOscillator();
+  const gain = AC.createGain();
+  osc.connect(gain); gain.connect(AC.destination);
+  const t = AC.currentTime;
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(440, t);
+  osc.frequency.linearRampToValueAtTime(660, t + 0.12);
+  gain.gain.setValueAtTime(vol, t);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+  osc.start(t); osc.stop(t + 0.25);
+}
+
+function playCountdownBeep(freq = 440) {
+  resumeAudio();
+  const osc = AC.createOscillator();
+  const gain = AC.createGain();
+  osc.connect(gain); gain.connect(AC.destination);
+  const t = AC.currentTime;
+  osc.frequency.value = freq;
+  osc.type = 'square';
+  gain.gain.setValueAtTime(0.3, t);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+  osc.start(t); osc.stop(t + 0.15);
+}
+
+function playGoSound() {
+  resumeAudio();
+  [523, 659, 784].forEach((f, i) => {
+    const osc = AC.createOscillator();
+    const gain = AC.createGain();
+    osc.connect(gain); gain.connect(AC.destination);
+    const t = AC.currentTime + i * 0.1;
+    osc.frequency.value = f;
+    osc.type = 'triangle';
+    gain.gain.setValueAtTime(0.4, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+    osc.start(t); osc.stop(t + 0.2);
+  });
+}
+
+function playComboSound() {
+  resumeAudio();
+  [880, 1046, 1318].forEach((f, i) => {
+    const osc = AC.createOscillator();
+    const gain = AC.createGain();
+    osc.connect(gain); gain.connect(AC.destination);
+    const t = AC.currentTime + i * 0.07;
+    osc.frequency.value = f;
+    osc.type = 'sine';
+    gain.gain.setValueAtTime(0.3, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+    osc.start(t); osc.stop(t + 0.18);
+  });
+}
+
+function playTimeWarningSound() {
+  resumeAudio();
+  const osc = AC.createOscillator();
+  const gain = AC.createGain();
+  osc.connect(gain); gain.connect(AC.destination);
+  const t = AC.currentTime;
+  osc.frequency.setValueAtTime(880, t);
+  osc.frequency.linearRampToValueAtTime(440, t + 0.3);
+  osc.type = 'sawtooth';
+  gain.gain.setValueAtTime(0.2, t);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+  osc.start(t); osc.stop(t + 0.3);
+}
+
+function playLevelCompleteSound() {
+  resumeAudio();
+  const notes = [523, 659, 784, 1046, 1318];
+  notes.forEach((f, i) => {
+    const osc = AC.createOscillator();
+    const gain = AC.createGain();
+    osc.connect(gain); gain.connect(AC.destination);
+    const t = AC.currentTime + i * 0.12;
+    osc.frequency.value = f;
+    osc.type = 'triangle';
+    gain.gain.setValueAtTime(0.35, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+    osc.start(t); osc.stop(t + 0.3);
+  });
+}
+
+function playPBSound() {
+  resumeAudio();
+  const notes = [523, 659, 784, 1046, 1318, 1568];
+  notes.forEach((f, i) => {
+    const osc = AC.createOscillator();
+    const gain = AC.createGain();
+    osc.connect(gain); gain.connect(AC.destination);
+    const t = AC.currentTime + i * 0.1;
+    osc.frequency.value = f;
+    osc.type = 'sine';
+    gain.gain.setValueAtTime(0.4, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+    osc.start(t); osc.stop(t + 0.3);
+  });
+}
+
+let selectedDuration = 10;
+let gameActive = false;
+let gameStarted = false;
+let count = 0;
+let timeLeft = 10;
+let timerInterval = null;
+
+let isCalibrating = false;
+let calibrationData = [];
+let calibrationThreshold = 0.08;
+let currentGameState = 'NONE';
+
+// ── NEW ALGORITHM: Per-hand peak/valley motion detection ──────────────────
+// The 6-7 flip = hands alternating UP/DOWN. Both hands move opposite each other.
+// Problem: MediaPipe often loses one hand during fast motion.
+// Solution: track each hand's OWN vertical motion independently.
+//   - Keep a rolling buffer of each hand's wrist Y.
+//   - When a hand reaches a local PEAK (top of arc, wristY goes low then turns),
+//     count it if the OTHER hand was at the BOTTOM — that's a valid flip.
+//   - Fallback: if only 1 hand visible, use that hand's peak/valley alternation.
+
+const Y_BUF_SIZE   = 6;    // frames of Y history per hand
+const MOTION_MIN   = 0.04; // minimum wrist travel to count as intentional move (fraction of frame)
+const DEBOUNCE_MS  = 180;  // min ms between counts (fast movement allowed)
+
+// Per-hand state
+let hBuf   = [[], []];     // Y buffers: hBuf[0]=left, hBuf[1]=right
+let hPhase = ['?', '?'];   // current phase: 'up'|'down'|'?'
+let lastAnyFlipTime = 0;
+
+function pushY(handIdx, y) {
+  hBuf[handIdx].push(y);
+  if (hBuf[handIdx].length > Y_BUF_SIZE) hBuf[handIdx].shift();
+}
+
+function avgY(handIdx) {
+  const b = hBuf[handIdx];
+  if (!b.length) return 0.5;
+  return b.reduce((a, v) => a + v, 0) / b.length;
+}
+
+// Returns 'up'|'down'|null based on recent motion direction
+// In MediaPipe, Y increases downward, so wristY LOW = hand is HIGH on screen
+function motionDir(handIdx) {
+  const b = hBuf[handIdx];
+  if (b.length < 3) return null;
+  const recent = b[b.length - 1];
+  const older  = b[0];
+  const delta  = older - recent; // positive = moved UP (Y decreased = hand went higher)
+  if (Math.abs(delta) < MOTION_MIN) return null;
+  return delta > 0 ? 'up' : 'down';
+}
+
+let lastFlipTime = 0; // kept for compat reference, logic uses lastAnyFlipTime
+let flipTimes = [];
+let streak = 0;
+let topStreak = 0;
+let warningPlayed = false;
+
+const PB_KEY = { 10: 'pb_10', 30: 'pb_30', 60: 'pb_60' };
+
+function getPB(sec) { return parseInt(localStorage.getItem(PB_KEY[sec]) || '0'); }
+function setPB(sec, val) { localStorage.setItem(PB_KEY[sec], val); }
+
+const homeScreen = document.getElementById('homeScreen');
+const gameScreen = document.getElementById('gameScreen');
+const resultsScreen = document.getElementById('resultsScreen');
+const videoEl = document.getElementById('videoEl');
+const overlayCanvas = document.getElementById('overlayCanvas');
+const ctx = overlayCanvas.getContext('2d');
+const countdownOverlay = document.getElementById('countdownOverlay');
+const countdownNum = document.getElementById('countdownNum');
+const hudTimer = document.getElementById('hudTimer');
+const hudCounter = document.getElementById('hudCounter');
+const hudPB = document.getElementById('hudPB');
+const hudMode = document.getElementById('hudMode');
+const dotUp = document.getElementById('dotUp');
+const dotDown = document.getElementById('dotDown');
+const stateLabel = document.getElementById('stateLabel');
+const flipFlash = document.getElementById('flipFlash');
+const posGuide = document.getElementById('posGuide');
+const comboPopup = document.getElementById('comboPopup');
+const speedVal = document.getElementById('speedVal');
+const streakVal = document.getElementById('streakVal');
+
+function updatePBDisplay() {
+  document.getElementById('pb10').textContent = getPB(10);
+  document.getElementById('pb30').textContent = getPB(30);
+  document.getElementById('pb60').textContent = getPB(60);
+}
+
+document.querySelectorAll('.timer-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.timer-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    selectedDuration = parseInt(btn.dataset.sec);
+    resumeAudio();
+  });
+});
+
+document.getElementById('startBtn').addEventListener('click', () => { resumeAudio(); startGame(); });
+document.getElementById('playAgainBtn').addEventListener('click', () => { showScreen(gameScreen); beginCalibration(); });
+document.getElementById('homeBtn').addEventListener('click', () => { showScreen(homeScreen); updatePBDisplay(); });
+
+function showScreen(screen) {
+  [homeScreen, gameScreen, resultsScreen].forEach(s => s.classList.add('hidden'));
+  screen.classList.remove('hidden');
+}
+
+function resizeCanvas() {
+  overlayCanvas.width = window.innerWidth;
+  overlayCanvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+let handsModel = null;
+let cameraUtil = null;
+let handDetected = false;
+
+function initMediaPipe() {
+  handsModel = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
+  handsModel.setOptions({
+    maxNumHands: 2,
+    modelComplexity: 1,
+    minDetectionConfidence: 0.4,
+    minTrackingConfidence: 0.3
+  });
+  handsModel.onResults(onHandResults);
+
+  cameraUtil = new Camera(videoEl, {
+    onFrame: async () => { if (handsModel) await handsModel.send({ image: videoEl }); },
+    width: 1280, height: 720
+  });
+  cameraUtil.start();
+}
+
+function onHandResults(results) {
+  ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+
+  const detected = results.multiHandLandmarks ? results.multiHandLandmarks.length : 0;
+
+  if (detected === 0) {
+    if (gameStarted && gameActive) {
+      stateLabel.textContent = 'NEED HANDS';
+      stateLabel.style.color = 'var(--accent)';
+      dotUp.className = 'state-dot'; dotDown.className = 'state-dot';
+    }
+    return;
+  }
+
+  // Show guide only when game not started
+  if (detected >= 1) posGuide.classList.add('hide');
+
+  // Sort hands left-to-right by wrist X for consistent indexing
+  const sorted = [...results.multiHandLandmarks].sort((a, b) => a[0].x - b[0].x);
+
+  // Draw skeletons
+  if (sorted[0]) drawHandSkeleton(sorted[0], 'left');
+  if (sorted[1]) drawHandSkeleton(sorted[1], 'right');
+
+  // Feed wrist Y into per-hand buffers (landmark 0 = wrist)
+  if (sorted[0]) pushY(0, sorted[0][0].y);
+  if (sorted[1]) pushY(1, sorted[1][0].y);
+
+  if (isCalibrating) {
+    // Collect motion amplitude for threshold tuning
+    if (sorted[0] && sorted[1]) {
+      calibrationData.push(Math.abs(sorted[0][0].y - sorted[1][0].y));
+    }
+    return;
+  }
+
+  if (!gameStarted || !gameActive) return;
+
+  const now = Date.now();
+  if (now - lastAnyFlipTime < DEBOUNCE_MS) return;
+
+  // ── DUAL-HAND MODE (preferred): opposite motion = one flip ──
+  if (detected >= 2) {
+    const dir0 = motionDir(0); // left hand direction
+    const dir1 = motionDir(1); // right hand direction
+
+    // Opposite directions = valid 6-7 swap
+    const oppositeMotion =
+      (dir0 === 'up'   && dir1 === 'down') ||
+      (dir0 === 'down' && dir1 === 'up');
+
+    if (oppositeMotion) {
+      const newState = dir0 === 'up' ? '6' : '7';
+      if (newState !== currentGameState) {
+        currentGameState = newState;
+        lastAnyFlipTime = now;
+        registerFlip(newState);
+        // Clear buffers so next move is judged fresh
+        hBuf[0] = []; hBuf[1] = [];
+      }
+    }
+
+    // Update indicator
+    const avg0 = avgY(0), avg1 = avgY(1);
+    if (avg0 < avg1) {
+      stateLabel.textContent = '6 (L-UP)';
+      stateLabel.style.color = 'var(--up-color)';
+      dotUp.className = 'state-dot active-up'; dotDown.className = 'state-dot';
+    } else {
+      stateLabel.textContent = '7 (R-UP)';
+      stateLabel.style.color = 'var(--down-color)';
+      dotDown.className = 'state-dot active-down'; dotUp.className = 'state-dot';
+    }
+
+  } else {
+    // ── SINGLE-HAND FALLBACK: detect peak/valley alternation on 1 hand ──
+    const handIdx = sorted[0] ? 0 : 1;
+    const dir = motionDir(handIdx);
+
+    if (dir && dir !== hPhase[handIdx]) {
+      hPhase[handIdx] = dir;
+      const newState = dir === 'up' ? '6' : '7';
+      if (newState !== currentGameState) {
+        currentGameState = newState;
+        lastAnyFlipTime = now;
+        registerFlip(newState);
+        hBuf[handIdx] = [];
+      }
+    }
+
+    stateLabel.textContent = '1 HAND';
+    stateLabel.style.color = 'var(--accent2)';
+    dotUp.className = 'state-dot'; dotDown.className = 'state-dot';
+  }
+}
+
+function registerFlip(newState) {
+  lastAnyFlipTime = Date.now();
+  count++; streak++;
+  if (streak > topStreak) topStreak = streak;
+
+  flipTimes.push(Date.now());
+  const cutoff = Date.now() - 5000;
+  flipTimes = flipTimes.filter(t => t > cutoff);
+
+  hudCounter.textContent = count;
+  streakVal.textContent = streak;
+
+  const fps = flipTimes.length / 5;
+  speedVal.textContent = fps.toFixed(1);
+
+  triggerFlipFlash(newState);
+  play67Sound();
+
+  if (streak === 5) { playComboSound(); showCombo('🔥 x5 STREAK!'); }
+  else if (streak === 10) { playComboSound(); showCombo('⚡ x10 ON FIRE!'); }
+  else if (streak % 10 === 0 && streak > 0) { playComboSound(); showCombo(`🔥 x${streak} BEAST!`); }
+}
+
+function triggerFlipFlash(state) {
+  flipFlash.style.background = state === '6'
+    ? 'radial-gradient(ellipse at 50% 100%, rgba(0,229,255,0.18) 0%, transparent 70%)'
+    : 'radial-gradient(ellipse at 50% 0%, rgba(255,60,60,0.18) 0%, transparent 70%)';
+  flipFlash.style.opacity = '1';
+  setTimeout(() => { flipFlash.style.opacity = '0'; }, 120);
+}
+
+function showCombo(msg) {
+  comboPopup.textContent = msg;
+  comboPopup.classList.add('show');
+  setTimeout(() => comboPopup.classList.remove('show'), 1200);
+}
+
+function drawHandSkeleton(landmarks, side) {
+  const W = overlayCanvas.width;
+  const H = overlayCanvas.height;
+  const toScreen = (lm) => ({ x: (1 - lm.x) * W, y: lm.y * H });
+
+  const connections = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
+  const lineColor = side === 'left' ? 'rgba(0,229,255,0.75)' : 'rgba(255,60,60,0.75)';
+  const dotColor = side === 'left' ? 'rgba(0,229,255,0.9)' : 'rgba(255,60,60,0.9)';
+
+  ctx.lineWidth = 2; ctx.strokeStyle = lineColor;
+
+  connections.forEach(([a, b]) => {
+    const p1 = toScreen(landmarks[a]); const p2 = toScreen(landmarks[b]);
+    ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
+  });
+
+  landmarks.forEach((lm, i) => {
+    const p = toScreen(lm);
+    const isKeyPoint = [0, 4, 8, 12, 16, 20].includes(i);
+    ctx.beginPath(); ctx.arc(p.x, p.y, isKeyPoint ? 6 : 4, 0, Math.PI * 2);
+    ctx.fillStyle = isKeyPoint ? '#fff' : dotColor; ctx.fill();
+    ctx.strokeStyle = dotColor; ctx.lineWidth = 1.5; ctx.stroke();
+  });
+}
+
+function startGame() {
+  showScreen(gameScreen);
+  count = 0; streak = 0; topStreak = 0; flipTimes = []; currentGameState = 'NONE'; warningPlayed = false;
+  hBuf = [[], []]; hPhase = ['?', '?']; lastAnyFlipTime = 0;
+  hudCounter.textContent = '0'; hudTimer.textContent = selectedDuration; hudTimer.classList.remove('warning');
+  hudMode.textContent = selectedDuration + 's'; hudPB.textContent = getPB(selectedDuration);
+  streakVal.textContent = '0'; speedVal.textContent = '0';
+  stateLabel.textContent = 'WAITING...'; stateLabel.style.color = 'var(--text)';
+  dotUp.className = 'state-dot'; dotDown.className = 'state-dot';
+  posGuide.classList.remove('hide');
+  gameActive = false; gameStarted = false;
+
+  if (!handsModel) { initMediaPipe(); }
+  beginCalibration();
+}
+
+function beginCalibration() {
+  isCalibrating = true;
+  calibrationData = [];
+  countdownOverlay.classList.remove('hidden');
+  countdownOverlay.style.opacity = '1';
+  document.querySelector('.countdown-get-ready').textContent = 'CALIBRATING...';
+  countdownNum.textContent = 'Move hands!';
+
+  let calTime = 3;
+  const calInterval = setInterval(() => {
+    calTime--;
+    if (calTime <= 0) {
+      clearInterval(calInterval);
+      isCalibrating = false;
+      if (calibrationData.length > 0) {
+        const maxDiff = Math.max(...calibrationData);
+        if (maxDiff > 0.05) { calibrationThreshold = maxDiff * 0.65; }
+      }
+      // Reset motion tracking for clean start
+      hBuf = [[], []]; hPhase = ['?', '?']; lastAnyFlipTime = 0;
+      beginCountdown();
+    }
+  }, 1000);
+}
+
+function beginCountdown() {
+  document.querySelector('.countdown-get-ready').textContent = 'Get ready...';
+  let cd = 5; 
+  countdownNum.textContent = cd;
+  playCountdownBeep(440);
+
+  const cdInterval = setInterval(() => {
+    cd--;
+    if (cd > 0) {
+      countdownNum.textContent = cd;
+      playCountdownBeep(cd === 1 ? 660 : 440);
+    } else {
+      clearInterval(cdInterval);
+      countdownNum.textContent = 'GO!';
+      playGoSound();
+      setTimeout(() => {
+        countdownOverlay.style.opacity = '0';
+        setTimeout(() => countdownOverlay.classList.add('hidden'), 300);
+        beginGame();
+      }, 600);
+    }
+  }, 1000);
+}
+
+function beginGame() {
+  gameActive = true; gameStarted = true; timeLeft = selectedDuration; hudTimer.textContent = timeLeft;
+
+  timerInterval = setInterval(() => {
+    timeLeft--; hudTimer.textContent = timeLeft;
+    if (timeLeft <= 3 && !warningPlayed) { warningPlayed = true; hudTimer.classList.add('warning'); playTimeWarningSound(); }
+    if (timeLeft <= 0) { clearInterval(timerInterval); endGame(); }
+  }, 1000);
+}
+
+function endGame() {
+  gameActive = false; gameStarted = false; hudTimer.classList.remove('warning');
+  const pb = getPB(selectedDuration);
+  const isNewPB = count > pb;
+  if (isNewPB) { setPB(selectedDuration, count); playPBSound(); }
+  else { playLevelCompleteSound(); }
+  setTimeout(() => showResults(count, isNewPB), 600);
+}
+
+function showResults(score, isNewPB) {
+  showScreen(resultsScreen);
+  document.getElementById('resultScore').textContent = score;
+  document.getElementById('resDuration').textContent = selectedDuration + 's';
+  document.getElementById('resBest').textContent = getPB(selectedDuration);
+  document.getElementById('resRate').textContent = (score / selectedDuration).toFixed(1);
+  document.getElementById('resStreak').textContent = topStreak;
+
+  const badge = document.getElementById('pbBadge');
+  if (isNewPB) { badge.classList.remove('hidden'); } else { badge.classList.add('hidden'); }
+  updatePBDisplay();
+}
+
+updatePBDisplay();
+</script>
+</body>
+</html>
